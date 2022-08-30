@@ -1,58 +1,102 @@
-const fs = require("fs")
-const { body, validationResult } = require("express-validator")
 const express = require("express")
 const app = express()
+const fs = require("fs")
+const file = "./data/categories.json"
+const {
+  checkIfExists,
+  checkDoesNotExists,
+} = require("../middlewares/categories")
+const { body, validationResult } = require("express-validator")
 
-// request to get all categories
-
+// -> afficher les categories
+//        -> get '/categories'
 app.get("/", (req, res) => {
-  fs.readFile("./categories.json", (err, data) => {
+  fs.readFile(file, (err, data) => {
     if (err) {
-      console.log(err)
-      return
-    } else {
-      res.json(JSON.parse(data.toString()))
-    }
-  })
-})
-
-// request to get one category by slug
-
-app.get("/:slug", (req, res) => {
-  fs.readFile("./categories.json", (err, data) => {
-    if (err) {
-      console.log(err)
-      return
+      res.status(500).json("Internal server error")
     } else {
       const categories = JSON.parse(data.toString())
-      const findedCategory = categories.find((category) => {
-        return category.slug === req.params.slug
-      })
-      res.json(findedCategory)
+      res.json(categories)
     }
   })
 })
 
-// request to post a new category
+// -> afficher une seule catégorie, qui renvoie aussi tous les articles correspondant
+//        -> get '/categories/:slug'
+//        -> middleware checkIfExists
+app.get("/:slug", checkIfExists, (req, res) => {
+  // Plus lisible
+  const category = {
+    name: req.category.name,
+    slug: req.category.slug,
+    description: req.category.description,
+    articles: [],
+  }
+  // Deconstruction
+  // const { name, slug, description }
+  // const category = {
+  //   name,
+  //   slug,
+  //   description,
+  //   articles: []
+  // }
 
-app.post("/", (req, res) => {
-  fs.readFile("./categories.json", (err, data) => {
+  // Clone
+  // const category = {
+  //   ...req.category
+  //   articles: []
+  // }
+
+  fs.readFile("./data/articles.json", (err, data) => {
     if (err) {
-      console.log(err)
-      return
+      res.status(500).json("Internal server error")
     } else {
-      const categories = JSON.parse(data.toString())
-      categories.push(req.body)
-      fs.writeFile("./categories.json", JSON.stringify(categories), (err) => {
-        if (err) {
-          console.log(err)
-          return
-        } else {
-          res.json(req.body)
-        }
-      })
+      const articles = JSON.parse(data.toString())
+      const filteredArticles = articles.filter(
+        (article) => article.category === category.slug
+      )
+      category.articles = filteredArticles
+
+      res.json(category)
     }
   })
 })
+
+// -> créer une catégorie
+//        -> validation name, description
+app.post(
+  "/",
+  body("name")
+    .isLength({ min: 4 })
+    .withMessage("Category name must be 4 chars minimum"),
+  body("description")
+    .isLength({ min: 20 })
+    .withMessage("Category description must be 20 chars minimum"),
+  checkDoesNotExists,
+  (req, res) => {
+    const { errors } = validationResult(req)
+
+    if (errors) {
+      res.status(400).json(errors)
+      return
+    }
+
+    const category = {
+      name: req.body.name,
+      description: req.body.description,
+      slug: req.categorySlug,
+    }
+
+    const categories = [...req.categories, category]
+
+    fs.writeFile(file, JSON.stringify(categories), (err) => {
+      if (err) {
+        res.status(500).json("Internal server error")
+      } else {
+        res.json(category)
+      }
+    })
+  }
+)
 
 module.exports = app

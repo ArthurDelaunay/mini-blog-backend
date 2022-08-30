@@ -1,61 +1,83 @@
-const fs = require("fs")
-const slugify = require("slugify")
-const { body, validationResult } = require("express-validator")
 const express = require("express")
 const app = express()
-
-// request to get all articles
+const fs = require("fs")
+const moment = require("moment")
+const { body, validationResult } = require("express-validator")
+const {
+  checkIfExists,
+  checkIfNotExist,
+  checkIfCategoryIsValid,
+} = require("../middlewares/articles")
+const file = "./data/articles.json"
 
 app.get("/", (req, res) => {
-  fs.readFile("./articles.json", (err, data) => {
+  fs.readFile(file, (err, data) => {
     if (err) {
-      console.log(err)
-      return
-    } else {
-      res.json(JSON.parse(data.toString()))
-    }
-  })
-})
-
-// request to get one article by slug
-
-app.get("/:slug", (req, res) => {
-  fs.readFile("./articles.json", (err, data) => {
-    if (err) {
-      console.log(err)
-      return
+      res.status(500).json("Internal server error")
     } else {
       const articles = JSON.parse(data.toString())
-      const findedArticle = articles.find((article) => {
-        return article.slug === req.params.slug
-      })
-      res.json(findedCategory)
+      res.json(articles)
     }
   })
+
+  // syntaxe promise
+  // try {
+  //   const data = await fs.readFile('./data/articlses.json')
+  //   const articles = JSON.parse(data.toString())
+  //   res.json(articles)
+  // } catch (e) {
+  //   console.log(e)
+  //   res.status(500).json('Internal server error')
+  // }
 })
 
-// request to post a new article
+app.get("/:slug", checkIfExists, (req, res) => {
+  res.json(req.article)
+})
 
-app.post("/:slug", (req, res) => {
-  const newArticle = { ...req.body, category: req.params.slug, slug: "" }
+app.post(
+  "/",
+  body("title")
+    .isLength({ min: 2, max: 60 })
+    .withMessage("Title must be between 2 and 60 chars"),
+  body("author").isString().withMessage("Invalid author name"),
+  body("description")
+    .isString()
+    .isLength({ min: 100, max: 1000 })
+    .withMessage("Description must be between 100 and 1000 chars"),
+  checkIfNotExist,
+  checkIfCategoryIsValid,
+  (req, res) => {
+    const { errors } = validationResult(req)
 
-  fs.readFile("./articles.json", (err, data) => {
-    if (err) {
-      console.log(err)
-      return
-    } else {
-      const articles = JSON.parse(data.toString())
-      articles.push(newArticle)
-      fs.writeFile("./articles.json", JSON.stringify(articles), (err) => {
-        if (err) {
-          console.log(err)
-          return
-        } else {
-          res.json(newArticle)
+    if (errors.length > 0) {
+      res.status(400).json(errors)
+    }
+
+    fs.readFile(file, (err, data) => {
+      if (err) {
+        res.status(500).json("Internal server error")
+      } else {
+        const articles = JSON.parse(data.toString())
+
+        const article = {
+          ...req.body,
+          slug: req.articleSlug,
+          date: moment().format(),
         }
-      })
-    }
-  })
-})
+
+        articles.push(article)
+
+        fs.writeFile(file, JSON.stringify(articles), (err) => {
+          if (err) {
+            res.status(500).json("Internal server error")
+          } else {
+            res.json(article)
+          }
+        })
+      }
+    })
+  }
+)
 
 module.exports = app
