@@ -76,8 +76,9 @@ app.post(
   (req, res) => {
     const { errors } = validationResult(req)
 
-    if (errors) {
-      res.status(400).json(errors)
+    if (errors.length > 0) {
+      console.log(errors)
+      res.status(400).json("ici")
       return
     }
 

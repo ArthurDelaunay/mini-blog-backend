@@ -24,7 +24,7 @@ const checkIfExists = (req, res, next) => {
 }
 
 const checkIfNotExist = (req, res, next) => {
-  if (!req.title) {
+  if (!req.body.title) {
     res.status(500).json("Internal server error")
     return
   }
